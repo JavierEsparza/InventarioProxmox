@@ -53,3 +53,16 @@ backups/
 /bootstrap/cache/*.php
 .env
 .env.*
+*.bak*
+*.bkp*
+backups/
+/storage/app/*
+/storage/framework/*
+/storage/logs/*
+/bootstrap/cache/*.php
+.env
+.env.*
+!.env.example
+app/Http/Controllers/],
+app/Http/Controllers/[storage],],
+app/Http/Controllers/\[storage\],\],

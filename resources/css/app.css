@@ -1,0 +1,72 @@
+/* Estilo para el contenedor principal */
+
+nav{
+    background-color: #3490dc;
+    color: #fff;
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+    font-weight: bold;
+    text-transform: uppercase;
+    transition: background-color 0.3s ease;
+}
+
+
+.container {
+    margin: 20px auto;
+    max-width: 800px;
+    padding: 20px;
+    background-color: #fff;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Estilo para los títulos */
+h1, h2 {
+    color: #333;
+    margin-bottom: 10px;
+}
+
+/* Estilo para las tarjetas */
+.card {
+    margin: 20px 0;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Estilo para el encabezado de las tarjetas */
+.card-header {
+    background-color: #f0f0f0;
+    padding: 10px;
+    border-bottom: 1px solid #ccc;
+}
+
+/* Estilo para los detalles dentro de las tarjetas */
+.card .float-center {
+    text-align: left;
+    margin: 10px;
+}
+
+/* Estilo para los párrafos dentro de las tarjetas */
+.card p {
+    margin: 5px 0;
+}
+
+/* Estilo para el botón */
+.button-personalizado {
+    background-color: #3490dc;
+    color: #fff;
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+    font-weight: bold;
+    text-transform: uppercase;
+    transition: background-color 0.3s ease;
+}
+
+.button-personalizado:hover {
+    background-color: #1e70bf;
+}
