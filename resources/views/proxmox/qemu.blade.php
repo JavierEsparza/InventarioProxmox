@@ -435,6 +435,9 @@
                                                             @php($svcVersion = $service['version'] ?? null)
                                                             @php($svcClass = $svcStatus === 'active' ? 'on' : (in_array($svcStatus, ['failed', 'restarting'], true) ? 'down' : ($serviceKey === 'php' && !empty($service['installed']) ? 'blue' : 'off')))
                                                             <span class="badge-soft {{ $svcClass }}" title="{{ $svcLabel . ' · ' . $svcStatus . ($svcVersion ? ' · ' . $svcVersion : '') . ($svcSince ? ' · iniciado: ' . $svcSince : '') . ($svcUptimeText ? ' · activo hace: ' . $svcUptimeText : '') . ($serviceKey === 'keepalived' && !empty($service['virtual_router_ids']) ? ' · VRID: ' . implode(',', $service['virtual_router_ids']) : '') }}">{{ $svcLabel }}{{ $svcVersion ? ' ' . $svcVersion : '' }}</span>
+                                                            @if ($serviceKey === 'keepalived' && !empty($service['virtual_router_ids']))
+                                                                <span class="badge-soft blue" title="Virtual Router ID de Keepalived">VRID {{ implode(', ', $service['virtual_router_ids']) }}</span>
+                                                            @endif
                                                         @empty
                                                             <span class="badge-soft off" title="Sin servicios instalados detectados o sin auditoría de servicios">-</span>
                                                         @endforelse
