@@ -327,7 +327,11 @@ class ClusterAuditController extends Controller
         $systemctlOutput = strtolower($existsRaw . "\n" . $raw);
         if (str_contains($systemctlOutput, 'failed to connect') || str_contains($systemctlOutput, 'system has not been booted')) {
             $process = '';
-            foreach (array_unique([$name, str_replace('-', '_', $name)]) as $processName) {
+            $processNames = [$name, str_replace('-', '_', $name)];
+            if ($name === 'wazuh-agent') {
+                $processNames[] = 'wazuh-agentd';
+            }
+            foreach (array_unique($processNames) as $processName) {
                 $processSafe = escapeshellarg($processName);
                 if (trim($this->exec($ssh, ['sh', '-c', "pgrep -x {$processSafe} >/dev/null 2>&1 && echo active || true"])) === 'active') {
                     $process = 'active';
