@@ -81,7 +81,7 @@ class ClusterAuditController extends Controller
             'zabbix_status_infransible' => null, 'zabbix_version_infransible' => null,
             'wazuh_status_infransible' => null, 'wazuh_version_infransible' => null,
             'services' => [], 'services_checked_at' => null,
-            'agent_audited' => false, 'secondary_ips' => [], 'configured_vips' => [], 'detail' => '',
+            'agent_audited' => false, 'secondary_ips' => [], 'configured_vips' => [], 'vrrp_instances' => [], 'detail' => '',
         ];
 
         try {
@@ -106,6 +106,11 @@ class ClusterAuditController extends Controller
             $ip = $ssh->exec("timeout 5s ip -o -4 addr show 2>/dev/null");
             $ka = $ssh->exec("timeout 5s sh -c 'test -r /etc/keepalived/keepalived.conf && cat /etc/keepalived/keepalived.conf || true'");
             $out['configured_vips'] = $this->parseKeepalivedIps($ka);
+            $out['vrrp_instances'] = $this->parseKeepalivedVrrp($ka);
+            if (isset($out['services']['keepalived'])) {
+                $out['services']['keepalived']['vrrp_instances'] = $out['vrrp_instances'];
+                $out['services']['keepalived']['virtual_router_ids'] = array_values(array_unique(array_map(fn ($item) => (int) $item['virtual_router_id'], $out['vrrp_instances'])));
+            }
             $out['result'] = 'ok';
             $out['secondary_ips'] = $this->parseIps($ip, $row->host, $out['configured_vips']);
             $sudo = trim($ssh->exec("timeout 5s sh -c 'sudo -n -v >/dev/null 2>&1; echo $?'"));
@@ -192,6 +197,7 @@ class ClusterAuditController extends Controller
             'mariadb' => [['mariadb-server'], ['mariadb'], ['mariadbd']],
             'postgresql' => [['postgresql'], ['postgresql'], ['postgres', 'postgresql']],
             'redis' => [['redis-server'], ['redis-server', 'redis'], ['redis-server', 'redis-cli']],
+            'keepalived' => [['keepalived'], ['keepalived'], ['keepalived']],
             'haproxy' => [['haproxy'], ['haproxy'], ['haproxy']],
             'isc-dhcp-server' => [['isc-dhcp-server'], ['isc-dhcp-server'], ['dhcpd']],
             'kea-dhcp4-server' => [['kea-dhcp4-server'], ['kea-dhcp4-server'], ['kea-dhcp4']],
@@ -346,6 +352,29 @@ class ClusterAuditController extends Controller
         ];
     }
 
+    private function parseKeepalivedVrrp($raw)
+    {
+        $items = []; $current = null; $depth = 0;
+        foreach (preg_split('/\r?\n/', (string) $raw) as $line) {
+            $line = preg_replace('/#.*$/', '', $line);
+            if ($current === null && preg_match('/\bvrrp_instance\s+([A-Za-z0-9_.:-]+)\s*\{/', $line, $m)) {
+                $current = ['instance' => $m[1], 'virtual_router_id' => null, 'interface' => null, 'state' => null];
+                $depth = substr_count($line, '{') - substr_count($line, '}');
+                continue;
+            }
+            if ($current === null) continue;
+            if (preg_match('/^\s*virtual_router_id\s+(\d+)\b/i', $line, $m)) $current['virtual_router_id'] = (int) $m[1];
+            if (preg_match('/^\s*interface\s+([^\s#]+)/i', $line, $m)) $current['interface'] = $m[1];
+            if (preg_match('/^\s*state\s+([^\s#]+)/i', $line, $m)) $current['state'] = strtoupper($m[1]);
+            $depth += substr_count($line, '{') - substr_count($line, '}');
+            if ($depth <= 0) {
+                if ($current['virtual_router_id'] !== null) $items[] = $current;
+                $current = null; $depth = 0;
+            }
+        }
+        return $items;
+    }
+
     private function parseKeepalivedIps($raw) { $ips = []; if (preg_match_all('/virtual_ipaddress(?:_excluded)?\s*\{(.*?)\}/is', $raw, $blocks)) foreach ($blocks[1] as $block) foreach (preg_split('/\r?\n/', $block) as $line) if (preg_match('/\b(\d{1,3}(?:\.\d{1,3}){3})(?:\/\d{1,2})?\b/', $line, $m)) $ips[] = $m[1]; return array_values(array_unique($ips)); }
     private function parseIps($raw, $host, $vips = []) { $ret = []; $found = []; foreach (preg_split('/\r?\n/', $raw) as $line) { if (!preg_match('/^\d+:\s+([^ ]+).*? inet (\d+\.\d+\.\d+\.\d+\/\d+)/', $line, $m)) continue; $if = $m[1]; $ip = explode('/', $m[2])[0]; if ($if === 'lo' || preg_match('/^(docker|br-|veth|virbr|cni|flannel|tun|tap)/i', $if) || $ip === $host || str_starts_with($ip, '127.') || preg_match('/^172\.(1[7-9]|2[0-8])\./', $ip)) continue; $found[$ip] = true; $ret[] = ['interface' => $if, 'cidr' => $m[2], 'network_type' => in_array($ip, $vips, true) ? 'vip' : (str_starts_with($ip, '10.0.202.') ? 'veeam' : 'secondary')]; } foreach (array_unique($vips) as $vip) if (!isset($found[$vip])) $ret[] = ['interface' => 'keepalived', 'cidr' => $vip . '/32', 'network_type' => 'vip']; return array_values(array_reduce($ret, function ($carry, $item) { $carry[$item['interface'] . '|' . explode('/', $item['cidr'])[0]] = $item; return $carry; }, [])); }
     public function stop($run)
@@ -360,5 +389,19 @@ class ClusterAuditController extends Controller
     }
 
     public function latest($cluster) { $run = DB::table('cluster_audit_runs')->where('cluster_name', urldecode($cluster))->latest()->first(); return $run ? $this->summary($run->id) : response()->json(['run' => null]); }
-    private function summary($run) { $r = DB::table('cluster_audit_runs')->where('id', $run)->first(); $rows = DB::table('cluster_audit_results')->where('run_id', $run)->orderBy('id')->get(); return response()->json(['run' => $r, 'counts' => $rows->groupBy('result')->map->count(), 'rows' => $rows]); }
+    private function summary($run)
+    {
+        $r = DB::table('cluster_audit_runs')->where('id', $run)->first();
+        $rows = DB::table('cluster_audit_results')->where('run_id', $run)->orderBy('id')->get();
+        $byVrid = [];
+        foreach ($rows as $row) {
+            $services = json_decode((string) ($row->services ?? ''), true) ?: [];
+            foreach (($services['keepalived']['vrrp_instances'] ?? []) as $instance) {
+                $id = (int) ($instance['virtual_router_id'] ?? 0);
+                if ($id > 0) $byVrid[(string) $id][] = ['host' => $row->server_name, 'ip' => $row->host, 'instance' => $instance['instance'] ?? null];
+            }
+        }
+        $duplicates = array_filter($byVrid, fn ($hosts) => count($hosts) > 1);
+        return response()->json(['run' => $r, 'counts' => $rows->groupBy('result')->map->count(), 'rows' => $rows, 'vrrp_duplicates' => $duplicates]);
+    }
 }
