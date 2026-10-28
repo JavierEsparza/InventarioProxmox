@@ -1,0 +1,3 @@
+<?php
+use Illuminate\Database\Migrations\Migration;use Illuminate\Database\Schema\Blueprint;use Illuminate\Support\Facades\Schema;
+return new class extends Migration { public function up(): void { Schema::create('proxmox_sync_runs',function(Blueprint $t){$t->id();$t->string('cluster_name');$t->dateTime('started_at');$t->dateTime('finished_at')->nullable();$t->string('status',20);$t->unsignedInteger('expected_nodes')->default(0);$t->unsignedInteger('processed_nodes')->default(0);$t->unsignedInteger('failed_nodes')->default(0);$t->timestamps();$t->index(['cluster_name','started_at','status']);}); } public function down(): void {Schema::dropIfExists('proxmox_sync_runs');}};
