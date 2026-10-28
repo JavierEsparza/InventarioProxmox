@@ -326,7 +326,14 @@ class ClusterAuditController extends Controller
         $raw = trim($ssh->exec("timeout 5s systemctl show -p ActiveState -p SubState -p ActiveEnterTimestamp -p UnitFileState --value $safe 2>&1"));
         $systemctlOutput = strtolower($existsRaw . "\n" . $raw);
         if (str_contains($systemctlOutput, 'failed to connect') || str_contains($systemctlOutput, 'system has not been booted')) {
-            $process = trim($this->exec($ssh, ['sh', '-c', "pgrep -x {$safe} >/dev/null 2>&1 && echo active || true"]));
+            $process = '';
+            foreach (array_unique([$name, str_replace('-', '_', $name)]) as $processName) {
+                $processSafe = escapeshellarg($processName);
+                if (trim($this->exec($ssh, ['sh', '-c', "pgrep -x {$processSafe} >/dev/null 2>&1 && echo active || true"])) === 'active') {
+                    $process = 'active';
+                    break;
+                }
+            }
             $initScript = trim($this->exec($ssh, ['sh', '-c', "test -x /etc/init.d/{$safe} && echo yes || true"]));
             return [
                 'status' => $process === 'active' ? 'active' : ($initScript === 'yes' ? 'inactive' : 'unknown'),
